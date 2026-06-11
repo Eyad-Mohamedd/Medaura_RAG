@@ -8,3 +8,4 @@ sentence-transformers
 rank-bm25
 python-dotenv
 pydantic
+langchain-huggingface
