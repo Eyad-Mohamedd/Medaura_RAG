@@ -18,7 +18,6 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_chroma import Chroma
 from langchain_community.retrievers import BM25Retriever
-from langchain.retrievers import EnsembleRetriever
 from langchain_core.documents import Document
 
 
@@ -43,7 +42,7 @@ class MedicalRAGSystem:
     Medical RAG System with:
     - Vector Search (Chroma + Multilingual HuggingFace embeddings)
     - BM25 Keyword Search
-    - EnsembleRetriever (Vector + BM25)
+    - Manual Ensemble Retriever (Vector 70% + BM25 30%)
     - Reciprocal Rank Fusion (RRF)
     - Multi-Query Generation (Arabic + English)
     - Conversation History Memory
@@ -73,7 +72,7 @@ class MedicalRAGSystem:
         self.vectorstore = None
         self.vector_retriever = None
         self.bm25_retriever = None
-        self.ensemble_retriever = None
+        self._retriever_k = 10
         self.llm = None
 
         self.history: List[ConversationTurn] = []
@@ -206,7 +205,7 @@ Red Flags: {red_flags_str}"""
         return self.vectorstore
 
     def setup_ensemble_retriever(self, k: int = 10):
-        print(f"\nSetting up Ensemble Retriever (Vector + BM25, top-{k})...")
+        print(f"\nSetting up Manual Ensemble Retriever (Vector + BM25, top-{k})...")
 
         if self.vectorstore is None:
             self.setup_vectorstore()
@@ -216,13 +215,10 @@ Red Flags: {red_flags_str}"""
 
         self.vector_retriever = self.vectorstore.as_retriever(search_kwargs={"k": k})
         self.bm25_retriever = BM25Retriever.from_documents(self.records, k=k)
-        self.ensemble_retriever = EnsembleRetriever(
-            retrievers=[self.vector_retriever, self.bm25_retriever],
-            weights=[0.7, 0.3],
-        )
+        self._retriever_k = k
 
-        print("Ensemble Retriever ready (Vector + BM25)")
-        return self.ensemble_retriever
+        print("Manual Ensemble Retriever ready (Vector 70% + BM25 30%)")
+        return self.vector_retriever
 
     def setup_llm(self, model: str = "models/gemini-flash-lite-latest", temperature: float = 0):
         print(f"\nSetting up LLM: {model}...")
@@ -270,9 +266,30 @@ User Query: {user_query}"""
         queries = [q.strip() for q in response.content.split("\n") if q.strip()]
         return queries
 
+    def _manual_ensemble_search(self, query: str) -> List[Document]:
+        """Manual hybrid retrieval: 70% vector + 30% BM25 using weighted scores."""
+        vector_results = self.vector_retriever.invoke(query)
+        bm25_results = self.bm25_retriever.invoke(query)
+
+        scores = defaultdict(float)
+        doc_map = {}
+
+        for rank, doc in enumerate(vector_results):
+            doc_id = doc.metadata.get("record_id", str(hash(doc.page_content)))
+            scores[doc_id] += 0.7 * (1 / (rank + 1))
+            doc_map[doc_id] = doc
+
+        for rank, doc in enumerate(bm25_results):
+            doc_id = doc.metadata.get("record_id", str(hash(doc.page_content)))
+            scores[doc_id] += 0.3 * (1 / (rank + 1))
+            doc_map[doc_id] = doc
+
+        sorted_keys = sorted(scores, key=lambda x: scores[x], reverse=True)
+        return [doc_map[k] for k in sorted_keys]
+
     def search(self, query: str, top_k: int = 5) -> List[Document]:
-        if self.ensemble_retriever is None:
-            raise ValueError("Ensemble retriever not initialized. Call initialize_all() first.")
+        if self.vector_retriever is None or self.bm25_retriever is None:
+            raise ValueError("Retrievers not initialized. Call initialize_all() first.")
 
         print(f"\nOriginal query: '{query}'")
         print("Generating alternative queries...")
@@ -285,7 +302,7 @@ User Query: {user_query}"""
             label = "(original)" if i == 1 else f"(generated {i - 1})"
             print(f"  {i}. {label} {q}")
 
-        all_results = [self.ensemble_retriever.invoke(q) for q in all_queries]
+        all_results = [self._manual_ensemble_search(q) for q in all_queries]
         fused_results = self.reciprocal_rank_fusion(all_results)
 
         print(f"\nDone! Returning top {top_k} records out of {len(fused_results)} found.")
