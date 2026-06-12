@@ -21,6 +21,21 @@ from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
 
 
+class E5Embeddings(HuggingFaceEmbeddings):
+    """HuggingFace embeddings for the intfloat/multilingual-e5 family.
+
+    e5 models are trained with asymmetric prefixes: documents must be embedded
+    as "passage: ..." and search queries as "query: ...". Skipping the prefixes
+    measurably hurts retrieval quality, so we add them here transparently.
+    """
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        return super().embed_documents([f"passage: {t}" for t in texts])
+
+    def embed_query(self, text: str) -> List[float]:
+        return super().embed_query(f"query: {text}")
+
+
 @dataclass
 class RAGResponse:
     answer: str
@@ -53,13 +68,12 @@ class MedicalRAGSystem:
         self,
         docs_path: str = ".",
         persist_directory: str = "db/chroma_db",
-        # [CHANGED] Replaced English-only model with a multilingual model
-        # that understands both Arabic and English
-        # Options (best to fastest):
-        #   "intfloat/multilingual-e5-large"                          (best quality)
-        #   "sentence-transformers/paraphrase-multilingual-mpnet-base-v2" (good & fast)
+        # Multilingual (Arabic + English) embedding model.
+        # Options (best to lightest) — overridable via the EMBEDDING_MODEL env var:
+        #   "intfloat/multilingual-e5-large"                              (best quality, heavy: ~2.2GB, 1024-dim)
+        #   "sentence-transformers/paraphrase-multilingual-mpnet-base-v2" (good & lighter)
         #   "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2" (lightest)
-        embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        embedding_model: str = "intfloat/multilingual-e5-large",
         # [CHANGED] Filenames in docs_path that should NOT be treated as
         # medical record files (e.g. casual_intents.json lives in the same
         # directory now that there's no dedicated DATA/ folder).
@@ -188,15 +202,24 @@ Red Flags: {red_flags_str}"""
         return self.records
 
     def setup_embeddings(self):
-        print(f"\nLoading embedding model: {self.embedding_model_name}...")
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name=self.embedding_model_name,
+        # Allow swapping the embedding model from Railway without code changes.
+        model_name = os.getenv("EMBEDDING_MODEL", self.embedding_model_name)
+        self.embedding_model_name = model_name
+
+        # e5 models need query:/passage: prefixes — use the wrapper that adds them.
+        is_e5 = "e5" in model_name.lower()
+        embeddings_cls = E5Embeddings if is_e5 else HuggingFaceEmbeddings
+
+        print(f"\nLoading embedding model: {model_name}{' (e5 prefixes on)' if is_e5 else ''}...")
+        self.embeddings = embeddings_cls(
+            model_name=model_name,
             model_kwargs={"device": "cpu"},
             # [PERF] Bigger batch = fewer forward passes when embedding all 1300
-            # records on CPU. NOTE: don't put show_progress_bar in encode_kwargs
-            # — langchain_huggingface injects it from `show_progress`, and passing
-            # both raises "got multiple values for keyword argument".
-            encode_kwargs={"batch_size": 64},
+            # records on CPU. normalize_embeddings pairs with cosine similarity
+            # (recommended for e5). NOTE: don't put show_progress_bar in
+            # encode_kwargs — langchain_huggingface injects it from `show_progress`,
+            # and passing both raises "got multiple values for keyword argument".
+            encode_kwargs={"batch_size": 64, "normalize_embeddings": True},
             # Prints a progress bar to the logs so the one-time index build is
             # visibly moving, not hung at "Creating new vector store...".
             show_progress=True,
@@ -495,9 +518,29 @@ User Query: {user_query}"""
 
 LANGUAGE RULE (VERY IMPORTANT):
 - Detect the language of the doctor's current question.
-- If the question is in Arabic, you MUST respond entirely in Arabic.
+- If the question is in Arabic, you MUST respond entirely in Arabic (use natural Egyptian/Modern Standard Arabic, not formal classical).
 - If the question is in English, respond in English.
 - Never mix languages in your answer.
+
+STEP 0 — CLASSIFY THE MESSAGE FIRST (MOST IMPORTANT RULE):
+Decide what the user's CURRENT message actually is:
+  (A) CLINICAL — it describes patient/personal symptoms, or asks about a
+      condition, diagnosis, urgency, specialist, medication, test, or treatment,
+      OR it is a follow-up that clearly continues a previous clinical answer
+      (e.g. "are you sure?", "what about children?", "and the treatment?").
+  (B) NON-CLINICAL — a greeting, a question about who or what you are, thanks,
+      chit-chat, an opinion question, or anything that is NOT an actual medical
+      case or clinical follow-up.
+
+If the message is (B) NON-CLINICAL:
+  - Reply with ONE short, warm, natural sentence in the user's language.
+  - DO NOT diagnose. DO NOT mention any condition, urgency, specialist, action,
+    red flags, or the retrieved records. DO NOT use the structured format below.
+  - If it fits, gently invite them to describe the symptoms they're feeling.
+  - Then STOP. Ignore everything below this line.
+  Example (Arabic, "إنت مين؟"): "أنا مساعدك الطبي، موجود أساعدك تفهم أعراضك وتوصل للرعاية المناسبة — قوللي بتحس بإيه وأنا معاك."
+
+Only if the message is (A) CLINICAL, continue with the full instructions below.
 
 You are in an ongoing conversation. Use the conversation history to understand follow-up questions.
 
@@ -530,14 +573,14 @@ IMPORTANT CLINICAL RULES:
 - Base urgency strictly on symptom intensity described in the user query.
 - Consider age_group and gender from the records when assessing likelihood — if the doctor mentions patient demographics, prioritize records that match.
 
-IMPORTANT RESPONSE RULES:
+IMPORTANT RESPONSE RULES (for CLINICAL answers only):
 - NEVER mention record IDs, record numbers, or SYM codes
 - Speak naturally as a medical assistant
 - Maximum 4 sentences total. No exceptions.
 - Each sentence must add NEW information. Never repeat or rephrase what was already said.
 - Write in plain flowing sentences only (no bullet points)
 
-STRUCTURE YOUR ANSWER EXACTLY LIKE THIS (4 sentences max):
+STRUCTURE A CLINICAL ANSWER EXACTLY LIKE THIS (4 sentences max):
 1) ONE sentence: most likely condition + one-line clinical reason.
 2) ONE sentence: urgency level + why (from Urgency Reason field).
 3) ONE sentence: recommended specialist + recommended action combined.
