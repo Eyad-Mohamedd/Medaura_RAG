@@ -1,9 +1,3 @@
-# CPU-only PyTorch — avoids pulling ~2 GB of CUDA libs you never use on Railway.
-# If this exact line ever fails to resolve, bump the version to the latest
-# CPU build listed at https://download.pytorch.org/whl/cpu/torch/
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.12.0+cpu
-
 # App framework
 fastapi==0.136.3
 uvicorn==0.49.0
@@ -14,13 +8,15 @@ python-dotenv==1.2.2
 langchain==1.3.8
 langchain-community==0.4.2
 langchain-core==1.4.6
-# OpenAI (GPT-4.1). Loose pin within the 1.x line so it resolves against
-# langchain-core 1.4.x; bump if pip can't find a compatible build.
+# OpenAI — used for BOTH the chat model (GPT-4.1) and embeddings
+# (text-embedding-3-small). Loose pin within the 1.x line so it resolves
+# against langchain-core 1.4.x; bump if pip can't find a compatible build.
 langchain-openai>=1.0,<2
-langchain-huggingface==1.2.2
 langchain-chroma==1.1.0
 
-# Retrieval / embeddings
+# Retrieval / vector store
+# NOTE: embeddings are now served by the OpenAI API, so torch +
+# sentence-transformers + langchain-huggingface are intentionally gone — that's
+# ~2GB less to build/download and far less RAM at runtime.
 chromadb==1.5.9
-sentence-transformers==5.5.1
 rank-bm25==0.2.2

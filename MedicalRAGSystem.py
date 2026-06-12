@@ -1,11 +1,12 @@
 """
 Medical RAG System
-Hybrid Retrieval: Vector Search (Chroma + HuggingFace) + BM25 + Multi-Query + Conversation Memory
-LLM: Google Gemini | Framework: LangChain
+Hybrid Retrieval: Vector Search (Chroma + OpenAI embeddings) + BM25 + Multi-Query + Conversation Memory
+LLM: OpenAI GPT-4.1 | Embeddings: text-embedding-3-small | Framework: LangChain
 Multilingual Support: Arabic + English
 """
 
 import os
+import re
 import json
 from collections import defaultdict
 from typing import List
@@ -14,26 +15,10 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 import langchain
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
-
-
-class E5Embeddings(HuggingFaceEmbeddings):
-    """HuggingFace embeddings for the intfloat/multilingual-e5 family.
-
-    e5 models are trained with asymmetric prefixes: documents must be embedded
-    as "passage: ..." and search queries as "query: ...". Skipping the prefixes
-    measurably hurts retrieval quality, so we add them here transparently.
-    """
-
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        return super().embed_documents([f"passage: {t}" for t in texts])
-
-    def embed_query(self, text: str) -> List[float]:
-        return super().embed_query(f"query: {text}")
 
 
 @dataclass
@@ -55,7 +40,7 @@ class ConversationTurn:
 class MedicalRAGSystem:
     """
     Medical RAG System with:
-    - Vector Search (Chroma + Multilingual HuggingFace embeddings)
+    - Vector Search (Chroma + OpenAI multilingual embeddings)
     - BM25 Keyword Search
     - Manual Ensemble Retriever (Vector 70% + BM25 30%)
     - Reciprocal Rank Fusion (RRF)
@@ -68,12 +53,10 @@ class MedicalRAGSystem:
         self,
         docs_path: str = ".",
         persist_directory: str = "db/chroma_db",
-        # Multilingual (Arabic + English) embedding model.
-        # Options (best to lightest) — overridable via the EMBEDDING_MODEL env var:
-        #   "intfloat/multilingual-e5-large"                              (best quality, heavy: ~2.2GB, 1024-dim)
-        #   "sentence-transformers/paraphrase-multilingual-mpnet-base-v2" (good & lighter)
-        #   "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2" (lightest)
-        embedding_model: str = "intfloat/multilingual-e5-large",
+        # OpenAI API embedding model (multilingual, runs server-side so there's
+        # no CPU bottleneck — ~100ms/query vs ~15s for a local model on Railway).
+        # Overridable via EMBEDDING_MODEL (e.g. "text-embedding-3-large").
+        embedding_model: str = "text-embedding-3-small",
         # [CHANGED] Filenames in docs_path that should NOT be treated as
         # medical record files (e.g. casual_intents.json lives in the same
         # directory now that there's no dedicated DATA/ folder).
@@ -206,25 +189,16 @@ Red Flags: {red_flags_str}"""
         model_name = os.getenv("EMBEDDING_MODEL", self.embedding_model_name)
         self.embedding_model_name = model_name
 
-        # e5 models need query:/passage: prefixes — use the wrapper that adds them.
-        is_e5 = "e5" in model_name.lower()
-        embeddings_cls = E5Embeddings if is_e5 else HuggingFaceEmbeddings
+        if not os.getenv("OPENAI_API_KEY"):
+            raise ValueError("OPENAI_API_KEY not found. Set it in your environment / Railway variables.")
 
-        print(f"\nLoading embedding model: {model_name}{' (e5 prefixes on)' if is_e5 else ''}...")
-        self.embeddings = embeddings_cls(
-            model_name=model_name,
-            model_kwargs={"device": "cpu"},
-            # [PERF] Bigger batch = fewer forward passes when embedding all 1300
-            # records on CPU. normalize_embeddings pairs with cosine similarity
-            # (recommended for e5). NOTE: don't put show_progress_bar in
-            # encode_kwargs — langchain_huggingface injects it from `show_progress`,
-            # and passing both raises "got multiple values for keyword argument".
-            encode_kwargs={"batch_size": 64, "normalize_embeddings": True},
-            # Prints a progress bar to the logs so the one-time index build is
-            # visibly moving, not hung at "Creating new vector store...".
-            show_progress=True,
-        )
-        print("Embedding model loaded!")
+        # OpenAI API embeddings: no local model download, no CPU inference.
+        # Embedding is a fast network call, so query latency drops from ~15s
+        # (e5-large on CPU) to ~100ms, and the one-time index build over 1300
+        # records finishes in seconds instead of an hour.
+        print(f"\nUsing OpenAI embeddings: {model_name}...")
+        self.embeddings = OpenAIEmbeddings(model=model_name)
+        print("Embedding model ready!")
         return self.embeddings
 
     def setup_vectorstore(self):
@@ -307,16 +281,19 @@ Red Flags: {red_flags_str}"""
         return str(content)
 
     def reciprocal_rank_fusion(
-        self, results_list: List[List[Document]], k: int = 60
+        self, results_list: List[List[Document]], k: int = 60, weights: List[float] = None
     ) -> List[Document]:
+        if weights is None:
+            weights = [1.0] * len(results_list)
+
         fused_scores = defaultdict(float)
         doc_lookup = {}
 
-        for results in results_list:
+        for results, weight in zip(results_list, weights):
             for rank, doc in enumerate(results):
                 doc_id = doc.metadata.get("record_id", str(hash(doc.page_content)))
                 doc_lookup[doc_id] = doc
-                fused_scores[doc_id] += 1 / (k + rank + 1)
+                fused_scores[doc_id] += weight * (1 / (k + rank + 1))
 
         sorted_docs = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)
         return [doc_lookup[doc_id] for doc_id, _ in sorted_docs]
@@ -343,6 +320,63 @@ User Query: {user_query}"""
         queries = [q.strip() for q in content.split("\n") if q.strip()]
         return queries
 
+    def route_message(self, query: str, history_text: str = "No previous conversation."):
+        """ONE LLM call that both classifies the message and (if clinical) writes
+        the search queries — so a non-clinical message ("who are you", greetings,
+        chit-chat) never reaches the slow vector-embedding retrieval step.
+
+        Returns a dict:
+          {"clinical": False, "reply": "<short reply>", "queries": []}   or
+          {"clinical": True,  "reply": None,            "queries": [...]}.
+        """
+        if self.llm is None:
+            self.setup_llm()
+
+        prompt = f"""You are a medical assistant. Read the user's LATEST message and the recent conversation.
+
+Recent conversation:
+{history_text}
+
+User's latest message: {query}
+
+Decide if the latest message is CLINICAL (describes symptoms, asks about a
+condition / diagnosis / urgency / specialist / medication / test / treatment,
+or is a follow-up that continues a previous clinical answer such as "are you
+sure?", "and for children?", "what's the treatment?") or NON-CLINICAL (greeting,
+asking who/what you are, thanks, small talk, or anything not about a medical case).
+
+Respond in EXACTLY one of these two formats, nothing else:
+
+If NON-CLINICAL:
+CASUAL
+<one short, warm, natural reply in the SAME language as the user; do not diagnose>
+
+If CLINICAL:
+CLINICAL
+<medical search query 1>
+<medical search query 2>
+<medical search query 3>
+(For Arabic input: 2 Arabic queries + 1 English. For English input: 3 English. No numbering.)"""
+
+        response = self.llm.invoke(prompt)
+        lines = [l.strip() for l in self._content_to_text(response.content).split("\n") if l.strip()]
+
+        if not lines:
+            # Defensive fallback: treat as clinical with the raw query.
+            return {"clinical": True, "reply": None, "queries": [query]}
+
+        tag = lines[0].upper()
+        rest = lines[1:]
+
+        if tag.startswith("CASUAL"):
+            reply = " ".join(rest).strip() or "أنا مساعدك الطبي — قوللي بتحس بإيه وأنا أساعدك."
+            return {"clinical": False, "reply": reply, "queries": []}
+
+        # CLINICAL (or anything unexpected → default to clinical so we never
+        # accidentally refuse a real medical question).
+        queries = rest if tag.startswith("CLINICAL") else lines
+        return {"clinical": True, "reply": None, "queries": queries or [query]}
+
     def _manual_ensemble_search(self, query: str) -> List[Document]:
         """Manual hybrid retrieval: 70% vector + 30% BM25 using weighted scores."""
         vector_results = self.vector_retriever.invoke(query)
@@ -364,21 +398,22 @@ User Query: {user_query}"""
         sorted_keys = sorted(scores, key=lambda x: scores[x], reverse=True)
         return [doc_map[k] for k in sorted_keys]
 
-    def search(self, query: str, top_k: int = 5) -> List[Document]:
+    def search(self, query: str, top_k: int = 5, generated_queries: List[str] = None) -> List[Document]:
         if self.vector_retriever is None or self.bm25_retriever is None:
             raise ValueError("Retrievers not initialized. Call initialize_all() first.")
 
         print(f"\nOriginal query: '{query}'")
-        print("Generating alternative queries...")
 
-        generated_queries = self.generate_multi_queries(query)
+        # `generated_queries` may be supplied by route_message() to avoid a second
+        # LLM call. If not provided (e.g. the CLI), generate them here.
+        if generated_queries is None:
+            print("Generating alternative queries...")
+            generated_queries = self.generate_multi_queries(query)
+
+        # OpenAI API embeddings are fast/cheap, so we run the full hybrid
+        # (vector + BM25) ensemble on every query variant for best recall.
         all_queries = [query] + generated_queries
-
-        print(f"Searching with {len(all_queries)} queries total:")
-        for i, q in enumerate(all_queries, 1):
-            label = "(original)" if i == 1 else f"(generated {i - 1})"
-            print(f"  {i}. {label} {q}")
-
+        print(f"Hybrid search across {len(all_queries)} query variant(s)")
         all_results = [self._manual_ensemble_search(q) for q in all_queries]
         fused_results = self.reciprocal_rank_fusion(all_results)
 
@@ -405,19 +440,58 @@ User Query: {user_query}"""
             print(f"\nInitialization error: {str(e)}")
             raise
 
-    def check_casual_intent(self, query: str):
-        """Check if query is casual chitchat — return instant response, no LLM needed."""
-        query_lower = query.lower().strip()
+    # Arabic diacritics (tashkeel) + tatweel — stripped so "شكراً" == "شكرا".
+    _AR_DIACRITICS = re.compile("[ؐ-ًؚ-ْٰـ]")
+    _AR_LETTER_MAP = str.maketrans({
+        "أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا",  # أإآٱ -> ا
+        "ى": "ي", "ئ": "ي",  # ى ئ -> ي
+        "ؤ": "و",  # ؤ -> و
+        "ة": "ه",  # ة -> ه
+    })
 
-        # Detect Arabic by checking Unicode range for Arabic characters
-        is_arabic = any('\u0600' <= c <= '\u06FF' for c in query)
+    @classmethod
+    def _normalize(cls, text: str) -> str:
+        """Lowercase, strip Arabic diacritics, unify letter shapes, drop
+        punctuation and collapse spaces so casual triggers match regardless of
+        spelling variants (أهلا/اهلا, شكراً/شكرا, ازيك؟/ازيك)."""
+        text = text.strip().lower()
+        text = cls._AR_DIACRITICS.sub("", text)
+        text = text.translate(cls._AR_LETTER_MAP)
+        # keep word chars + Arabic letters; everything else becomes a space
+        text = re.sub("[^\\w؀-ۿ]+", " ", text)
+        return re.sub(r"\s+", " ", text).strip()
+
+    def check_casual_intent(self, query: str):
+        """Instant canned reply for clear chit-chat - no LLM, no retrieval.
+
+        Conservative on purpose: it only fires when the message is essentially
+        the casual phrase (exact match, or the trigger plus at most one extra
+        word). A message that opens with a greeting but also describes a symptom
+        does NOT short-circuit here - it falls through to the smart router, which
+        sees the symptom and sends it to the RAG pipeline. This stops a greeting
+        from hijacking a real clinical message.
+        """
+        is_arabic = any('؀' <= c <= 'ۿ' for c in query)
+        norm = self._normalize(query)
+        if not norm:
+            return None
+        n_words = len(norm.split())
 
         for intent, data in self.casual_intents.items():
-            if any(trigger in query_lower for trigger in data["triggers"]):
-                print(f"[Casual intent detected: {intent}] — skipping RAG pipeline")
-                if is_arabic and "response_ar" in data:
-                    return data["response_ar"]
-                return data.get("response_en", data.get("response", ""))
+            for trigger in data["triggers"]:
+                t = self._normalize(trigger)
+                if not t:
+                    continue
+                t_words = len(t.split())
+                exact = norm == t
+                # "contains" only counts when the message is barely longer than
+                # the trigger itself (trigger words + 1), i.e. just politeness.
+                near = (t in norm) and (n_words <= t_words + 1)
+                if exact or near:
+                    print(f"[Casual intent detected: {intent}] - skipping RAG pipeline")
+                    if is_arabic and "response_ar" in data:
+                        return data["response_ar"]
+                    return data.get("response_en", data.get("response", ""))
         return None
 
     def ask_with_history(
@@ -450,11 +524,26 @@ User Query: {user_query}"""
             )
         # ──────────────────────────────────────────────────────
 
-        print("\n[Step 1/3] Retrieving relevant records...")
-        retrieved_docs = self.search(query, top_k=top_k)
-
-        print("\n[Step 2/3] Building conversation context...")
         history_text = self._format_history_for_prompt(history)
+
+        # ── Router (1 LLM call): classify + generate queries together. A
+        #    non-clinical message gets a short reply and SKIPS the slow
+        #    embedding retrieval entirely. ──
+        print("\n[Step 1/3] Routing message (clinical vs casual)...")
+        route = self.route_message(query, history_text)
+        if not route["clinical"]:
+            print("[Routed as NON-CLINICAL] — skipping retrieval")
+            history.append(ConversationTurn(role="user", content=query))
+            history.append(ConversationTurn(role="assistant", content=route["reply"]))
+            return RAGResponse(
+                answer=route["reply"],
+                sources=[],
+                query=query,
+                total_records_found=0,
+            )
+
+        print("[Routed as CLINICAL] Retrieving relevant records...")
+        retrieved_docs = self.search(query, top_k=top_k, generated_queries=route["queries"])
 
         print(f"\n[Step 3/3] Generating answer (with {len(history)} history messages)...")
         answer = self._generate_answer_with_history(
@@ -522,27 +611,9 @@ LANGUAGE RULE (VERY IMPORTANT):
 - If the question is in English, respond in English.
 - Never mix languages in your answer.
 
-STEP 0 — CLASSIFY THE MESSAGE FIRST (MOST IMPORTANT RULE):
-Decide what the user's CURRENT message actually is:
-  (A) CLINICAL — it describes patient/personal symptoms, or asks about a
-      condition, diagnosis, urgency, specialist, medication, test, or treatment,
-      OR it is a follow-up that clearly continues a previous clinical answer
-      (e.g. "are you sure?", "what about children?", "and the treatment?").
-  (B) NON-CLINICAL — a greeting, a question about who or what you are, thanks,
-      chit-chat, an opinion question, or anything that is NOT an actual medical
-      case or clinical follow-up.
-
-If the message is (B) NON-CLINICAL:
-  - Reply with ONE short, warm, natural sentence in the user's language.
-  - DO NOT diagnose. DO NOT mention any condition, urgency, specialist, action,
-    red flags, or the retrieved records. DO NOT use the structured format below.
-  - If it fits, gently invite them to describe the symptoms they're feeling.
-  - Then STOP. Ignore everything below this line.
-  Example (Arabic, "إنت مين؟"): "أنا مساعدك الطبي، موجود أساعدك تفهم أعراضك وتوصل للرعاية المناسبة — قوللي بتحس بإيه وأنا معاك."
-
-Only if the message is (A) CLINICAL, continue with the full instructions below.
-
-You are in an ongoing conversation. Use the conversation history to understand follow-up questions.
+This message has already been classified as a clinical question. Answer it
+clinically. Use the conversation history to understand follow-up questions
+(e.g. "are you sure?", "what about children?", "and the treatment?").
 
 === CONVERSATION HISTORY ===
 {history_text}
@@ -573,18 +644,32 @@ IMPORTANT CLINICAL RULES:
 - Base urgency strictly on symptom intensity described in the user query.
 - Consider age_group and gender from the records when assessing likelihood — if the doctor mentions patient demographics, prioritize records that match.
 
-IMPORTANT RESPONSE RULES (for CLINICAL answers only):
-- NEVER mention record IDs, record numbers, or SYM codes
-- Speak naturally as a medical assistant
-- Maximum 4 sentences total. No exceptions.
-- Each sentence must add NEW information. Never repeat or rephrase what was already said.
-- Write in plain flowing sentences only (no bullet points)
+FIRST, CHECK THE CONVERSATION HISTORY — is this a NEW case or a FOLLOW-UP?
+- NEW CASE: the patient is describing their symptoms for the first time (no prior
+  assessment of this case exists in the history).
+- FOLLOW-UP: you have ALREADY given an assessment in the history, and the current
+  message asks something more about it (e.g. "are you sure?", "what should I do?",
+  "and the treatment?", "what about children?", "why?").
 
-STRUCTURE A CLINICAL ANSWER EXACTLY LIKE THIS (4 sentences max):
+IF FOLLOW-UP (VERY IMPORTANT — DO NOT REPEAT YOURSELF):
+- Answer ONLY the specific new thing being asked. 1–3 sentences.
+- Do NOT restate the diagnosis, urgency, specialist, or action you already gave
+  unless the user explicitly asks for that exact part again.
+- Add NEW, specific information that moves the conversation forward (e.g. if asked
+  "اعمل ايه؟"/"what do I do?", give concrete steps/self-care/when-to-seek-care; if
+  asked "متأكد؟"/"are you sure?", explain your confidence and what would change it).
+- Never reply with the same answer as before plus one extra word. That is wrong.
+
+IF NEW CASE, structure the answer EXACTLY like this (4 sentences max):
 1) ONE sentence: most likely condition + one-line clinical reason.
 2) ONE sentence: urgency level + why (from Urgency Reason field).
 3) ONE sentence: recommended specialist + recommended action combined.
 4) ONLY IF red flags exist: one sentence listing them. Otherwise skip entirely.
+
+IN ALL CASES:
+- NEVER mention record IDs, record numbers, or SYM codes.
+- Speak naturally as a medical assistant, in plain flowing sentences (no bullet points).
+- Every sentence must add NEW information — never repeat or rephrase earlier content.
 """
 
         try:

@@ -3,15 +3,14 @@
     "triggers": [
       "hello", "hi", "hey", "hiya", "howdy", "what's up", "whats up",
       "sup", "yo", "good morning", "good afternoon", "good evening",
-      "good night", "greetings", "how are you", "how are u", "how r u",
-      "how's it going", "hows it going", "how do you do", "nice to meet you",
-      "pleased to meet you", "long time no see", "hey there", "hi there",
-      "مرحبا", "مرحباً", "هلا", "هلو", "أهلا", "أهلاً", "أهلين",
-      "السلام عليكم", "وعليكم السلام", "صباح الخير", "صباح النور",
-      "مساء الخير", "مساء النور", "كيفك", "كيف حالك", "عامل ايه",
-      "عامل إيه", "ازيك", "ازيك؟", "إزيك", "إزيك؟", "ايه الأخبار",
-      "ايه الاخبار", "إيه الأخبار", "هاي", "هاى", "يسعدلي صباحك",
-      "يسعد مساك", "تحياتي", "تحيه", "تحية"
+      "good night", "greetings", "hey there", "hi there", "salam",
+      "مرحبا", "مرحباً", "هلا", "هلو", "أهلا", "أهلاً", "اهلا", "أهلين", "اهلين",
+      "اهلا بيك", "اهلا بيكي", "اهلا بيكم", "يا هلا", "سلام", "سلام عليكم",
+      "السلام عليكم", "وعليكم السلام", "صباح الخير", "صباح النور", "صباحو",
+      "مساء الخير", "مساء النور", "مسائو", "ازيك", "إزيك", "ازيك يا دكتور",
+      "عامل ايه", "عامل إيه", "ايه الأخبار", "ايه الاخبار", "إيه الأخبار",
+      "هاي", "هاى", "هاي يا دكتور", "ايه يا دكتور", "ezayak", "ezayek",
+      "izayak", "3amel eh", "3amla eh", "ezay", "sabah el kheir", "ahlan"
     ],
     "response_en": "Hello! 👋 I'm your medical assistant. How can I help you today? Please describe your symptoms and I'll do my best to assist you.",
     "response_ar": "أهلاً! 👋 أنا مساعدك الطبي. إزيك النهارده؟ من فضلك وصفلي الأعراض اللي بتحس بيها وأنا هساعدك."
@@ -20,14 +19,14 @@
   "thanks": {
     "triggers": [
       "thanks", "thank you", "thank u", "thx", "ty", "tysm",
-      "thank you so much", "thanks a lot", "thanks a bunch",
+      "thank you so much", "thanks a lot", "thanks a bunch", "thanks doc",
       "many thanks", "much appreciated", "appreciate it", "appreciate that",
-      "cheers", "that was helpful", "very helpful", "helpful",
-      "شكرا", "شكراً", "شكرا جزيلا", "شكراً جزيلاً", "ألف شكر",
-      "متشكر", "متشكرة", "مشكور", "مشكورة", "يسلمو", "يسلموا",
-      "يسلمو ايدك", "جزاك الله خيرا", "جزاك الله خيراً", "بارك الله فيك",
-      "الله يبارك فيك", "تسلم", "تسلمي", "تسلملي", "الله يسلمك",
-      "كتر خيرك", "كثر خيرك", "ربنا يجزيك خير", "شكرا ليك", "شكرا لك"
+      "cheers", "that was helpful", "very helpful", "helpful", "merci",
+      "شكرا", "شكراً", "شكرا جزيلا", "شكراً جزيلاً", "ألف شكر", "شكرا ليك",
+      "شكرا لك", "شكرا يا دكتور", "متشكر", "متشكرة", "متشكر اوي", "مشكور",
+      "مشكورة", "يسلمو", "يسلموا", "تسلم ايدك", "تسلم ايديك", "جزاك الله خيرا",
+      "جزاك الله خيراً", "بارك الله فيك", "الله يبارك فيك", "ربنا يكرمك",
+      "تسلم", "تسلمي", "تسلملي", "الله يسلمك", "كتر خيرك", "ميرسي", "ميرسى"
     ],
     "response_en": "You're welcome! 😊 I'm happy I could help. Is there anything else you'd like to know?",
     "response_ar": "العفو! 😊 يسعدني إني أكون فدت. في أي حاجة تانية عايز تعرفها؟"
@@ -39,12 +38,12 @@
       "later", "take care", "have a good day", "have a nice day",
       "talk to you later", "ttyl", "peace", "farewell", "until next time",
       "i'm done", "im done", "that's all", "thats all", "nothing else",
-      "no more questions", "i'm good", "im good",
-      "مع السلامة", "مع السلامه", "باي", "باى", "وداعا", "وداعاً",
+      "no more questions", "bye bye", "yala bye",
+      "مع السلامة", "مع السلامه", "باي", "باى", "باي باي", "وداعا", "وداعاً",
       "إلى اللقاء", "الى اللقاء", "تصبح على خير", "تصبحي على خير",
-      "يسعدك", "الله معك", "في أمان الله", "في امان الله",
-      "خليني اروح", "هروح دلوقتي", "همشي", "خلاص كده",
-      "خلاص", "تمام خلاص", "كفاية كده", "بس كده", "شكرا وباي"
+      "في أمان الله", "في امان الله", "هروح دلوقتي", "همشي", "خلاص كده",
+      "خلاص", "تمام خلاص", "كفاية كده", "بس كده", "شكرا وباي", "يلا سلام",
+      "ماشي سلام", "اشوفك", "هكلمك بعدين", "يلا باي"
     ],
     "response_en": "Goodbye! 👋 Take care of yourself and stay healthy. Don't hesitate to come back if you have more questions!",
     "response_ar": "مع السلامة! 👋 خد بالك من نفسك وابقى بصحة. متترددش ترجع لو عندك أي أسئلة!"
@@ -53,14 +52,16 @@
   "bot_identity": {
     "triggers": [
       "who are you", "what are you", "what is your name", "whats your name",
-      "what's your name", "are you a bot", "are you ai", "are you human",
-      "are you a robot", "are you real", "what can you do", "how do you work",
-      "tell me about yourself", "introduce yourself",
-      "مين انت", "مين أنت", "إيه اسمك", "ايه اسمك", "ما اسمك",
-      "هل انت روبوت", "هل أنت روبوت", "هل انت بوت", "هل أنت بشر",
-      "انت بشر ولا آلة", "تعرف تعمل ايه", "بتشتغل ازاي", "عرفني بنفسك"
+      "what's your name", "what's your name doc", "are you a bot", "are you ai",
+      "are you human", "are you a robot", "are you real", "what can you do",
+      "how do you work", "tell me about yourself", "introduce yourself", "who r u",
+      "مين انت", "مين أنت", "انت مين", "أنت مين", "انت مين بالظبط", "إيه اسمك",
+      "ايه اسمك", "ما اسمك", "انت اسمك ايه", "انت ايه", "انت بوت", "هل انت روبوت",
+      "هل أنت روبوت", "هل انت بوت", "انت روبوت ولا انسان", "هل انت دكتور",
+      "انت دكتور", "انت بشر ولا آلة", "تعرف تعمل ايه", "بتعمل ايه", "بتشتغل ازاي",
+      "عرفني بنفسك", "انت بتفهم في الطب"
     ],
-    "response_en": "I'm a medical assistant chatbot 🤖 designed to help you understand your symptoms and guide you on what to do next. I can analyze symptoms, suggest possible conditions, and recommend whether you should see a doctor. Please note that I'm not a substitute for professional medical advice!",
+    "response_en": "I'm Medaura 🤖 a smart medical assistant built to help you understand your symptoms and know what to do next. I can analyze symptoms, suggest possible conditions, and flag how urgent they are. Just keep in mind — I'm not a replacement for a real doctor!",
     "response_ar": "أنا Medaura 🤖 مساعد طبي ذكي اتصمم عشان يساعدك تفهم أعراضك وتعرف تعمل إيه بعد كده. أقدر أحلل الأعراض، أقترح حالات محتملة، وأحدد مستوى الطوارئ. بس خد بالك — أنا مش بديل عن الدكتور!"
   },
 
@@ -69,11 +70,10 @@
       "how are you", "how are u", "how r u", "how's it going", "hows it going",
       "how are you doing", "how do you feel", "are you okay", "are you ok",
       "you okay", "you ok", "you good", "you alright",
-      "عامل ايه", "عامل إيه", "ازيك", "إزيك", "كيف حالك", "كيفك",
-      "بخير", "انت بخير", "أنت بخير", "عيون بخير", "كويس",
-      "كيف الحال", "الحمد لله كيفك", "ايه أخبارك", "ايه اخبارك"
+      "كيف حالك", "كيفك", "كيف الحال", "ايه أخبارك", "ايه اخبارك", "انت عامل ايه",
+      "انت بخير", "أنت بخير"
     ],
-    "response_en": "I'm doing great, thank you for asking! 😊 I'm here and ready to help you. What symptoms are you experiencing today?",
+    "response_en": "I'm doing great, thank you for asking! 😊 I'm here and ready to help. What symptoms are you experiencing today?",
     "response_ar": "أنا تمام الحمد لله، شكراً إنك سألت! 😊 أنا هنا وجاهز أساعدك. إيه الأعراض اللي بتحس بيها النهارده؟"
   },
 
@@ -83,32 +83,73 @@
       "excellent", "perfect", "brilliant", "fantastic", "wonderful",
       "you're great", "youre great", "you're amazing", "youre amazing",
       "you're helpful", "youre helpful", "i like you", "love this",
-      "كويس", "ممتاز", "عظيم", "رائع", "حلو", "جميل", "مفيد",
-      "بتساعد كتير", "بتساعدني", "انت كويس", "أنت كويس",
-      "انت ممتاز", "أنت ممتاز", "يسلم", "احسنت", "أحسنت", "برافو"
+      "ممتاز", "عظيم", "رائع", "جميل", "مفيد", "جامد", "جامد جدا", "جامد جداً",
+      "تحفة", "روعة", "هايل", "شاطر", "عاش", "بتجنن", "يا باشا", "نضيف",
+      "بتساعد كتير", "بتساعدني", "انت كويس", "انت ممتاز", "احسنت", "أحسنت", "برافو"
     ],
     "response_en": "Thank you so much! 😊 That means a lot. I'm always here to help. Do you have any symptoms you'd like me to look into?",
     "response_ar": "شكراً جزيلاً! 😊 ده بيسعدني جداً. أنا دايماً هنا أساعدك. في أعراض عايز أشوفها معاك؟"
+  },
+
+  "agreement": {
+    "triggers": [
+      "ok", "okay", "okey", "alright", "got it", "fine", "sure", "cool", "great",
+      "تمام", "تمام كده", "تمام يا دكتور", "ماشي", "ماشي يا دكتور", "حاضر",
+      "اوكي", "اوك", "ميه ميه", "مية مية", "اكيد", "طبعا", "زبط", "ظبط",
+      "اه", "ايوه", "ايوة", "اه تمام", "تمام التمام", "mashy", "tamam"
+    ],
+    "response_en": "Great 👍 Whenever you're ready, tell me the symptoms you're feeling or ask me anything and I'll help.",
+    "response_ar": "تمام 👍 وأنا جاهز في أي وقت — قوللي الأعراض اللي حاسس بيها أو اسألني أي حاجة وأنا هساعدك."
+  },
+
+  "user_has_question": {
+    "triggers": [
+      "i have a question", "can i ask", "can i ask you", "may i ask", "a question",
+      "عندي سؤال", "ليا سؤال", "ممكن سؤال", "ممكن اسالك", "ممكن أسألك",
+      "عايز اسأل", "عايز أسأل", "بقولك", "ممكن اسأل سؤال", "سؤال صغير", "اسألك حاجة"
+    ],
+    "response_en": "Of course, go ahead! 😊 Tell me what you'd like to know, or describe the symptoms you're experiencing.",
+    "response_ar": "اتفضل اسأل! 😊 قوللي عايز تعرف إيه، أو وصفلي الأعراض اللي بتحس بيها وأنا معاك."
+  },
+
+  "well_wishes": {
+    "triggers": [
+      "ان شاء الله", "انشاء الله", "إن شاء الله", "ربنا يشفيك", "ربنا يخليك",
+      "الله يعافيك", "بالشفاء", "سلامتك", "ربنا معاك", "ربنا يسهل", "بإذن الله"
+    ],
+    "response_en": "Thank you 🙏 May you always be in good health. If anything is bothering you, just describe it and I'll help.",
+    "response_ar": "ربنا يخليك ويتمم عليك بالصحة 🙏 لو في أي حاجة مضايقاك، قوللي عليها وأنا معاك."
   },
 
   "confusion": {
     "triggers": [
       "i don't understand", "i dont understand", "what do you mean",
       "can you explain", "explain that", "say that again", "repeat that",
-      "i'm confused", "im confused", "what", "huh", "what?",
-      "مش فاهم", "مش فاهمة", "مش فاهم قصدك", "ايه يعني",
-      "إيه يعني", "وضحلي", "توضح أكتر", "توضح اكتر",
-      "مش واضح", "تاني مرة", "اعد الكلام", "أعد الكلام"
+      "i'm confused", "im confused",
+      "مش فاهم", "مش فاهمة", "مش فاهم قصدك", "قصدك ايه", "ايه يعني", "يعني ايه",
+      "وضحلي", "توضح أكتر", "توضح اكتر", "مش واضح", "تاني مرة", "اعد الكلام",
+      "أعد الكلام", "اعد تاني", "مفهمتش"
     ],
-    "response_en": "I'm sorry for the confusion! 😅 To help you best, please describe your symptoms clearly. For example: 'I have a headache and fever for 2 days.' I'll analyze them and guide you from there.",
+    "response_en": "Sorry for the confusion! 😅 To help you best, describe your symptoms clearly — for example: 'I have a headache and fever for 2 days.' I'll analyze them and guide you.",
     "response_ar": "آسف على اللبس! 😅 عشان أساعدك أحسن، وصفلي أعراضك بوضوح. مثلاً: 'عندي صداع وحرارة من يومين.' وأنا هحللهالك وأرشدك."
+  },
+
+  "frustration": {
+    "triggers": [
+      "you're useless", "youre useless", "this is wrong", "that's wrong",
+      "thats wrong", "you don't understand", "you dont understand", "stop",
+      "كلامك غلط", "انت غلطان", "مش بتفهم", "انت مش فاهم", "انت بتهبل",
+      "رد صح", "مش عاجبني", "ده غلط", "انت وحش", "كلام فاضي"
+    ],
+    "response_en": "I'm sorry if that wasn't helpful 🙏 Let's try again — please describe your symptoms in a bit more detail (what, where, since when) and I'll give you a clearer answer.",
+    "response_ar": "آسف لو ردي مكنش مفيد 🙏 خلينا نجرب تاني — وصفلي أعراضك بتفصيل شوية (إيه بالظبط، فين، من إمتى) وأنا هديك إجابة أوضح."
   },
 
   "jokes": {
     "triggers": [
       "tell me a joke", "say something funny", "make me laugh",
       "joke", "funny", "lol", "haha", "hehe",
-      "قولي نكتة", "قول نكتة", "ضحكني", "في نكتة", "هههه", "هاهاها"
+      "قولي نكتة", "قول نكتة", "ضحكني", "في نكتة", "نكتة كده", "هههه", "هاهاها"
     ],
     "response_en": "Haha I wish I could! 😄 I'm a medical assistant so jokes aren't really my specialty — but keeping you healthy is! Tell me your symptoms and I'll get to work.",
     "response_ar": "ياريت! 😄 أنا مساعد طبي فالنكت مش تخصصي — بس صحتك هي تخصصي! قولي أعراضك وأنا هبدأ."
@@ -118,7 +159,7 @@
     "triggers": [
       "test", "testing", "hello world", "1234", "asdf", "qwerty",
       "aaa", "bbb", "abc", "123", "ping", "check",
-      "تجربة", "تست", "اختبار", "جرب", "شغال"
+      "تجربة", "تست", "اختبار", "جرب", "شغال", "انت شغال"
     ],
     "response_en": "System is up and running! ✅ How can I assist you with your health today?",
     "response_ar": "السيستم شغال تمام! ✅ إزاي أقدر أساعدك في صحتك النهارده؟"
@@ -128,11 +169,11 @@
     "triggers": [
       "i'm not okay", "im not okay", "i feel bad", "i'm sad", "im sad",
       "i'm depressed", "im depressed", "i feel terrible", "i'm stressed",
-      "im stressed", "not good", "not well", "i'm tired", "im tired",
-      "مش كويس", "مش بخير", "تعبان", "تعبانة", "زهقت", "محبطن",
-      "مكتئب", "مكتئبة", "مش عارف اكمل", "تعبت", "حاسس بضيق"
+      "im stressed", "not good", "not well",
+      "مش كويس", "مش بخير", "زهقت", "محبط", "مكتئب", "مكتئبة", "حاسس بضيق",
+      "نفسيتي تعبانة", "مضايق", "مخنوق"
     ],
-    "response_en": "I'm sorry to hear that 😔 Please know that I'm here to help. Could you tell me more about how you're feeling physically? Describe any symptoms you have and I'll do my best to assist you.",
+    "response_en": "I'm sorry to hear that 😔 I'm here to help. Could you tell me more about how you're feeling physically? Describe any symptoms and I'll do my best to assist you.",
     "response_ar": "آسف إنك حاسس بكده 😔 بس أنا هنا أساعدك. تقدر تحكيلي أكتر عن إحساسك الجسدي؟ وصفلي أي أعراض عندك وأنا هبذل قصارى جهدي."
   }
 }
