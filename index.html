@@ -698,7 +698,9 @@ textarea#msg::placeholder { color: var(--muted); font-size: 14px; }
 </div>
 
 <script>
-const API = 'http://localhost:8000';
+// Call whatever origin served this page (Railway domain in prod, localhost in dev).
+// Empty string => relative URLs like "/status", "/chat" hit the same server.
+const API = window.location.origin;
 let initialized = false;
 let chatLog = [];
 
@@ -738,7 +740,7 @@ async function autoInit() {
   try {
     // Poll /status until backend says it's ready
     let attempts = 0;
-    const maxAttempts = 60; // wait up to 60s
+    const maxAttempts = 180; // wait up to 3 min (first cold boot builds the index)
     while (attempts < maxAttempts) {
       try {
         const res  = await fetch(`${API}/status`);
