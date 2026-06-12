@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 import langchain
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langchain_chroma import Chroma
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
@@ -247,13 +247,15 @@ Red Flags: {red_flags_str}"""
         print("Manual Ensemble Retriever ready (Vector 70% + BM25 30%)")
         return self.vector_retriever
 
-    def setup_llm(self, model: str = "models/gemini-flash-lite-latest", temperature: float = 0):
+    def setup_llm(self, model: str = "gpt-4.1", temperature: float = 0):
+        # Model can be overridden with the OPENAI_MODEL env var without code changes.
+        model = os.getenv("OPENAI_MODEL", model)
         print(f"\nSetting up LLM: {model}...")
 
-        if not os.getenv("GOOGLE_API_KEY"):
-            raise ValueError("GOOGLE_API_KEY not found. Please set it in your .env file.")
+        if not os.getenv("OPENAI_API_KEY"):
+            raise ValueError("OPENAI_API_KEY not found. Set it in your environment / Railway variables.")
 
-        self.llm = ChatGoogleGenerativeAI(model=model, temperature=temperature)
+        self.llm = ChatOpenAI(model=model, temperature=temperature)
         print("LLM ready")
         return self.llm
 
@@ -395,16 +397,28 @@ User Query: {user_query}"""
                 return data.get("response_en", data.get("response", ""))
         return None
 
-    def ask_with_history(self, query: str, top_k: int = 5) -> RAGResponse:
+    def ask_with_history(
+        self,
+        query: str,
+        top_k: int = 5,
+        history: List[ConversationTurn] = None,
+    ) -> RAGResponse:
+        # `history` is the per-conversation memory to read from and append to.
+        # The web server passes a separate list per session so users don't share
+        # each other's context. If None, fall back to the instance-wide history
+        # (used by the CLI in main()).
+        if history is None:
+            history = self.history
+
         print(f"\n{'=' * 60}")
-        print(f"QUESTION (turn {len(self.history) // 2 + 1}): {query}")
+        print(f"QUESTION (turn {len(history) // 2 + 1}): {query}")
         print(f"{'=' * 60}")
 
         # ── Casual intent check (zero tokens, zero LLM call) ──
         casual_response = self.check_casual_intent(query)
         if casual_response:
-            self.history.append(ConversationTurn(role="user", content=query))
-            self.history.append(ConversationTurn(role="assistant", content=casual_response))
+            history.append(ConversationTurn(role="user", content=query))
+            history.append(ConversationTurn(role="assistant", content=casual_response))
             return RAGResponse(
                 answer=casual_response,
                 sources=[],
@@ -417,9 +431,9 @@ User Query: {user_query}"""
         retrieved_docs = self.search(query, top_k=top_k)
 
         print("\n[Step 2/3] Building conversation context...")
-        history_text = self._format_history_for_prompt()
+        history_text = self._format_history_for_prompt(history)
 
-        print(f"\n[Step 3/3] Generating answer (with {len(self.history)} history messages)...")
+        print(f"\n[Step 3/3] Generating answer (with {len(history)} history messages)...")
         answer = self._generate_answer_with_history(
             query=query,
             retrieved_docs=retrieved_docs,
@@ -427,10 +441,10 @@ User Query: {user_query}"""
             max_records_in_context=top_k,
         )
 
-        self.history.append(ConversationTurn(role="user", content=query))
-        self.history.append(ConversationTurn(role="assistant", content=answer))
+        history.append(ConversationTurn(role="user", content=query))
+        history.append(ConversationTurn(role="assistant", content=answer))
 
-        print(f"\nHistory now has {len(self.history)} messages ({len(self.history) // 2} turns)")
+        print(f"\nHistory now has {len(history)} messages ({len(history) // 2} turns)")
 
         return RAGResponse(
             answer=answer,
@@ -439,11 +453,13 @@ User Query: {user_query}"""
             total_records_found=len(retrieved_docs),
         )
 
-    def _format_history_for_prompt(self) -> str:
-        if not self.history:
+    def _format_history_for_prompt(self, history: List[ConversationTurn] = None) -> str:
+        if history is None:
+            history = self.history
+        if not history:
             return "No previous conversation."
 
-        recent_history = self.history[-10:]
+        recent_history = history[-10:]
         lines = []
         for turn in recent_history:
             role_label = "User" if turn.role == "user" else "Assistant"

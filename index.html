@@ -493,10 +493,12 @@ input[type=range] {
   border-radius: 18px;
   font-size: 14.5px;
   line-height: 1.7;
-  /* Wrap long words/URLs instead of overflowing; honor real word breaks. */
+  /* Wrap long words/URLs instead of overflowing; honor real word breaks.
+     NOTE: no `white-space: pre-wrap` — line breaks come from <br> injected in
+     JS. pre-wrap would render the HTML template's own indentation as blank
+     space (which made the "thinking" bubble a tall empty box). */
   overflow-wrap: anywhere;
   word-break: normal;
-  white-space: pre-wrap;
 }
 /* dir="auto" on the bubble makes Arabic render RTL and English LTR,
    each aligned to its own start edge. */
@@ -545,11 +547,11 @@ input[type=range] {
 }
 .msg-row.user .msg-ts { text-align: right; }
 
-/* Thinking dots */
+/* Thinking bubble — small, snug pill instead of a full-size bubble */
+.bubble.thinking { padding: 12px 16px; }
 .thinking-dots {
   display: flex;
   gap: 5px;
-  padding: 4px 0;
   align-items: center;
 }
 .thinking-dots span {
@@ -801,6 +803,17 @@ const API = window.location.origin;
 let initialized = false;
 let chatLog = [];
 
+// Stable per-browser id so the backend keeps this user's conversation history
+// separate from every other visitor's (the RAG instance is shared server-side).
+const SESSION_ID = (() => {
+  let id = localStorage.getItem('medaura_sid');
+  if (!id) {
+    id = 'sid-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('medaura_sid', id);
+  }
+  return id;
+})();
+
 // ── Mobile sidebar drawer ─────────────────────────────────────────────────────
 function toggleSidebar(force) {
   const open = (typeof force === 'boolean') ? force : !document.body.classList.contains('sb-open');
@@ -898,11 +911,7 @@ function appendThinking() {
   row.innerHTML = `
     <div class="av bot">⚕️</div>
     <div class="msg-content">
-      <div class="bubble bot">
-        <div class="thinking-dots">
-          <span></span><span></span><span></span>
-        </div>
-      </div>
+      <div class="bubble bot thinking"><div class="thinking-dots"><span></span><span></span><span></span></div></div>
     </div>`;
   msgs.appendChild(row);
   msgs.scrollTop = msgs.scrollHeight;
@@ -928,7 +937,7 @@ async function sendMessage() {
     const res  = await fetch(`${API}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, top_k: 5, use_history: true })
+      body: JSON.stringify({ message: text, top_k: 5, use_history: true, session_id: SESSION_ID })
     });
     const data = await res.json();
 
@@ -951,7 +960,13 @@ async function sendMessage() {
 
 // ── Clear chat ────────────────────────────────────────────────────────────────
 async function clearChat() {
-  try { await fetch(`${API}/clear`, { method: 'POST' }); } catch(e) {}
+  try {
+    await fetch(`${API}/clear`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: SESSION_ID })
+    });
+  } catch(e) {}
 
   const msgs = document.getElementById('messages');
   msgs.innerHTML = '';

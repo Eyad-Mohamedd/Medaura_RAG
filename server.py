@@ -75,11 +75,25 @@ def favicon():
     return Response(status_code=204)
 
 
+# ── Per-session conversation memory ───────────────────────────────────────────
+# The RAG instance is a single shared object, so its built-in history would be
+# global to every visitor. Keep one history list per browser session here and
+# pass it into the RAG call so users never see each other's context.
+from MedicalRAGSystem import ConversationTurn  # noqa: E402
+
+SESSIONS: dict[str, list[ConversationTurn]] = {}
+
+
 # ── Request / Response models ─────────────────────────────────────────────────
 class ChatRequest(BaseModel):
     message: str
     top_k: int = 5
     use_history: bool = True
+    session_id: str = "default"
+
+
+class ClearRequest(BaseModel):
+    session_id: str = "default"
 
 
 class Source(BaseModel):
@@ -110,9 +124,15 @@ def chat(req: ChatRequest):
         return ChatResponse(answer=msg, sources=[], total_records=0)
 
     try:
-        # NOTE: MedicalRAGSystem only exposes ask_with_history(); there is no
-        # ask(). Both branches use it so use_history=False can't crash.
-        response = rag.ask_with_history(req.message, top_k=req.top_k)
+        # Use this session's own history. When use_history is False we pass a
+        # throwaway empty list so the answer ignores prior turns and nothing is
+        # persisted for the session.
+        if req.use_history:
+            history = SESSIONS.setdefault(req.session_id, [])
+        else:
+            history = []
+
+        response = rag.ask_with_history(req.message, top_k=req.top_k, history=history)
 
         sources = [
             Source(
@@ -132,9 +152,8 @@ def chat(req: ChatRequest):
 
 
 @app.post("/clear")
-def clear():
-    if rag:
-        rag.clear_history()
+def clear(req: ClearRequest):
+    SESSIONS.pop(req.session_id, None)
     return {"status": "ok", "message": "History cleared"}
 
 

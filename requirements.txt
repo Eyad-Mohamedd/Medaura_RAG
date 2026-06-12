@@ -14,7 +14,9 @@ python-dotenv==1.2.2
 langchain==1.3.8
 langchain-community==0.4.2
 langchain-core==1.4.6
-langchain-google-genai==4.2.5
+# OpenAI (GPT-4.1). Loose pin within the 1.x line so it resolves against
+# langchain-core 1.4.x; bump if pip can't find a compatible build.
+langchain-openai>=1.0,<2
 langchain-huggingface==1.2.2
 langchain-chroma==1.1.0
 
