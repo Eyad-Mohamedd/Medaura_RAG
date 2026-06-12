@@ -192,6 +192,11 @@ Red Flags: {red_flags_str}"""
         self.embeddings = HuggingFaceEmbeddings(
             model_name=self.embedding_model_name,
             model_kwargs={"device": "cpu"},
+            # [PERF] Bigger batch = fewer forward passes when embedding all 1300
+            # records on CPU. show_progress_bar makes the otherwise-silent
+            # "Creating new vector store..." step print progress to the logs so
+            # it's obvious the build is moving, not hung.
+            encode_kwargs={"batch_size": 64, "show_progress_bar": True},
         )
         print("Embedding model loaded!")
         return self.embeddings
