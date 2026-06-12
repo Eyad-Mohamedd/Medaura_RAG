@@ -51,7 +51,7 @@ class MedicalRAGSystem:
 
     def __init__(
         self,
-        docs_path: str = "DATA",
+        docs_path: str = ".",
         persist_directory: str = "db/chroma_db",
         # [CHANGED] Replaced English-only model with a multilingual model
         # that understands both Arabic and English
@@ -60,10 +60,19 @@ class MedicalRAGSystem:
         #   "sentence-transformers/paraphrase-multilingual-mpnet-base-v2" (good & fast)
         #   "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2" (lightest)
         embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        # [CHANGED] Filenames in docs_path that should NOT be treated as
+        # medical record files (e.g. casual_intents.json lives in the same
+        # directory now that there's no dedicated DATA/ folder).
+        excluded_files: List[str] = None,
     ):
         self.docs_path = docs_path
         self.persist_directory = persist_directory
         self.embedding_model_name = embedding_model
+
+        # [CHANGED] Default exclusion list — avoids accidentally ingesting
+        # non-record JSON files (like casual_intents.json) as medical records
+        # when docs_path is the project root.
+        self.excluded_files = excluded_files if excluded_files is not None else ["casual_intents.json"]
 
         load_dotenv()
 
@@ -102,9 +111,19 @@ class MedicalRAGSystem:
             if not filename.endswith(".json"):
                 continue
 
+            # [CHANGED] Skip non-record JSON files (e.g. casual_intents.json)
+            if filename in self.excluded_files:
+                continue
+
             filepath = os.path.join(self.docs_path, filename)
             with open(filepath, "r", encoding="utf-8") as f:
                 records = json.load(f)
+
+            # [CHANGED] Guard against the loaded JSON not being a list of
+            # records (e.g. if a non-record JSON file slips through)
+            if not isinstance(records, list):
+                print(f"Skipping '{filename}': expected a JSON list of records.")
+                continue
 
             for record in records:
                 # Format red_flags as a readable string if it's a list
@@ -541,7 +560,7 @@ STRUCTURE YOUR ANSWER EXACTLY LIKE THIS (4 sentences max):
 
 def main():
     rag = MedicalRAGSystem(
-        docs_path="DATA",
+        docs_path=".",
         persist_directory="db/chroma_db",
     )
 
