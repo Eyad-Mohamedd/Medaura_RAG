@@ -249,6 +249,30 @@ Red Flags: {red_flags_str}"""
         print("LLM ready")
         return self.llm
 
+    @staticmethod
+    def _content_to_text(content) -> str:
+        """Normalize an LLM response's `.content` to a plain string.
+
+        Google Gemini (via langchain) sometimes returns `content` as a *list*
+        of parts (strings or {"type": "text", "text": ...} dicts) rather than a
+        single string. Calling `.split()` / passing that straight to a pydantic
+        `str` field then blows up with "'list' object has no attribute 'split'".
+        This flattens any shape back into one string.
+        """
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for part in content:
+                if isinstance(part, str):
+                    parts.append(part)
+                elif isinstance(part, dict):
+                    parts.append(part.get("text", part.get("content", "")))
+                else:
+                    parts.append(str(part))
+            return "".join(parts)
+        return str(content)
+
     def reciprocal_rank_fusion(
         self, results_list: List[List[Document]], k: int = 60
     ) -> List[Document]:
@@ -282,7 +306,8 @@ Rules:
 User Query: {user_query}"""
 
         response = self.llm.invoke(prompt)
-        queries = [q.strip() for q in response.content.split("\n") if q.strip()]
+        content = self._content_to_text(response.content)
+        queries = [q.strip() for q in content.split("\n") if q.strip()]
         return queries
 
     def _manual_ensemble_search(self, query: str) -> List[Document]:
@@ -497,7 +522,7 @@ STRUCTURE YOUR ANSWER EXACTLY LIKE THIS (4 sentences max):
 
         try:
             response = self.llm.invoke(prompt)
-            return response.content
+            return self._content_to_text(response.content)
         except Exception as e:
             error_message = f"Answer generation failed: {str(e)}"
             print(f"\nError: {error_message}")

@@ -476,13 +476,31 @@ input[type=range] {
   border: 1px solid var(--border);
 }
 
+/* Column holding bubble + timestamp. Capped width, but allowed to shrink to
+   content — `min-width:0` stops the flex item from forcing premature wraps. */
+.msg-content {
+  display: flex;
+  flex-direction: column;
+  max-width: 74%;
+  min-width: 0;
+}
+.msg-row.user .msg-content { align-items: flex-end; }
+
 .bubble {
-  max-width: 72%;
-  padding: 15px 20px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 14px 18px;
   border-radius: 18px;
   font-size: 14.5px;
-  line-height: 1.75;
+  line-height: 1.7;
+  /* Wrap long words/URLs instead of overflowing; honor real word breaks. */
+  overflow-wrap: anywhere;
+  word-break: normal;
+  white-space: pre-wrap;
 }
+/* dir="auto" on the bubble makes Arabic render RTL and English LTR,
+   each aligned to its own start edge. */
+.bubble[dir="rtl"], .bubble:dir(rtl) { text-align: right; }
 .bubble.bot {
   background: var(--bg3);
   border: 1px solid var(--border);
@@ -490,7 +508,7 @@ input[type=range] {
   color: var(--text);
 }
 .bubble.user {
-  background: linear-gradient(135deg, rgba(20,146,232,0.12), rgba(25,212,168,0.08));
+  background: linear-gradient(135deg, rgba(20,146,232,0.14), rgba(25,212,168,0.09));
   border: 1px solid rgba(20,146,232,0.25);
   border-top-right-radius: 4px;
   color: var(--text);
@@ -603,11 +621,90 @@ textarea#msg::placeholder { color: var(--muted); font-size: 14px; }
   cursor: not-allowed;
   transform: none;
 }
+
+/* ══════════════════════════════════════
+   MOBILE MENU BUTTON (hidden on desktop)
+══════════════════════════════════════ */
+.menu-btn {
+  display: none;
+  position: fixed;
+  top: 12px; left: 12px;
+  z-index: 60;
+  width: 42px; height: 42px;
+  border-radius: 11px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+}
+.sb-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 40;
+}
+
+/* ══════════════════════════════════════
+   RESPONSIVE
+══════════════════════════════════════ */
+
+/* Tablets / small laptops — give the chat more room, widen bubbles. */
+@media (max-width: 1024px) {
+  .sidebar { width: 240px; min-width: 240px; }
+  .msg-content { max-width: 82%; }
+  .hero-title { font-size: 46px; }
+}
+
+/* Phones — sidebar becomes a slide-in drawer over the chat. */
+@media (max-width: 720px) {
+  .menu-btn { display: flex; }
+
+  .sidebar {
+    position: fixed;
+    top: 3px; bottom: 0; left: 0;
+    width: 270px; min-width: 270px;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 0.28s ease;
+    box-shadow: 0 0 40px rgba(0,0,0,0.6);
+  }
+  body.sb-open .sidebar { transform: translateX(0); }
+  body.sb-open .sb-backdrop { display: block; }
+
+  .main { width: 100%; }
+
+  .msg-row { padding: 6px 14px; gap: 9px; }
+  .msg-content { max-width: 88%; }
+  .av { width: 32px; height: 32px; font-size: 15px; }
+  .bubble { font-size: 14px; padding: 12px 15px; }
+
+  .hero { padding: 60px 16px 30px; }
+  .hero-title { font-size: 38px; }
+  .hero-desc { font-size: 14px; }
+  .hero-desc br { display: none; }
+
+  .input-area { padding: 10px 12px 14px; }
+  textarea#msg { font-size: 16px; min-height: 50px; padding: 12px 15px; }
+  #send-btn { width: 46px; height: 46px; font-size: 18px; }
+}
+
+/* Very small phones — bubbles nearly full width. */
+@media (max-width: 420px) {
+  .msg-content { max-width: 92%; }
+  .hero-title { font-size: 32px; }
+}
 </style>
 </head>
 <body>
 
 <div class="ecg-bar"></div>
+
+<button class="menu-btn" onclick="toggleSidebar()" title="Menu" aria-label="Menu">☰</button>
+<div class="sb-backdrop" onclick="toggleSidebar(false)"></div>
 
 <div class="app">
 
@@ -689,7 +786,7 @@ textarea#msg::placeholder { color: var(--muted); font-size: 14px; }
 
     <!-- Input -->
     <div class="input-area">
-      <textarea id="msg" placeholder="Describe your symptoms here…" rows="1"
+      <textarea id="msg" placeholder="Describe your symptoms here…" rows="1" dir="auto"
                 onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
       <button id="send-btn" onclick="sendMessage()" disabled title="Send">➤</button>
     </div>
@@ -703,6 +800,12 @@ textarea#msg::placeholder { color: var(--muted); font-size: 14px; }
 const API = window.location.origin;
 let initialized = false;
 let chatLog = [];
+
+// ── Mobile sidebar drawer ─────────────────────────────────────────────────────
+function toggleSidebar(force) {
+  const open = (typeof force === 'boolean') ? force : !document.body.classList.contains('sb-open');
+  document.body.classList.toggle('sb-open', open);
+}
 
 // ── Auto-resize textarea ──────────────────────────────────────────────────────
 function autoResize(el) {
@@ -776,8 +879,8 @@ function appendMsg(role, content, sources = [], totalRecords = 0) {
   row.className = `msg-row ${role}`;
   row.innerHTML = `
     <div class="av ${role === 'bot' ? 'bot' : 'user'}">${role === 'bot' ? '⚕️' : '👤'}</div>
-    <div>
-      <div class="bubble ${role === 'bot' ? 'bot' : 'user'}">${content}</div>
+    <div class="msg-content">
+      <div class="bubble ${role === 'bot' ? 'bot' : 'user'}" dir="auto">${content}</div>
       <div class="msg-ts">${ts}</div>
     </div>`;
 
@@ -794,7 +897,7 @@ function appendThinking() {
   row.id = 'thinking-row';
   row.innerHTML = `
     <div class="av bot">⚕️</div>
-    <div>
+    <div class="msg-content">
       <div class="bubble bot">
         <div class="thinking-dots">
           <span></span><span></span><span></span>
