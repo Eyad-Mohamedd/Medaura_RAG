@@ -603,7 +603,7 @@ CLINICAL
         # [CHANGED] Prompt now leverages new schema fields:
         # primary_condition, urgency_reason, recommended_specialist, and red_flags.
         # The model is instructed to use each field with purpose rather than just listing them.
-       prompt = f"""You are a medical assistant helping doctors analyze patient symptoms.
+        prompt = f"""You are a medical assistant helping doctors analyze patient symptoms.
 
 LANGUAGE RULE (VERY IMPORTANT):
 - Detect the language of the doctor's current question.
